@@ -166,28 +166,7 @@ impl ServiceRegistration {
 
         let (tx, rx) = oneshot::channel::<(u32, ServiceInstance)>();
 
-        // Hand ownership of the instance to the in-flight registration; it is
-        // returned to us through `rx` once the completion callback fires.
-        let request = build_request(instance, interface_index, Some(tx));
-
-        // SAFETY: `request` references the instance and context, both owned by the
-        // `CallbackContext` behind `context_ptr`, which stays alive until the
-        // completion callback reclaims it.
-        let result = unsafe { Dns::DnsServiceRegister(&request, None) };
-        trace!("DnsServiceRegister result: {result}");
-
-        if result != DNS_REQUEST_PENDING {
-            // The callback will not fire; reclaim the context (which frees the
-            // instance on drop).
-            // SAFETY: `context_ptr` came from `Box::into_raw` in `build_request`.
-            let context_ptr = request.pQueryContext as *mut CallbackContext;
-            unsafe {
-                drop(Box::from_raw(context_ptr));
-            }
-            return Err(ServiceRegistrationError::RegistrationError(format!(
-                "DnsServiceRegister failed with status: {result}"
-            )));
-        }
+        register(instance, interface_index, Some(tx))?;
 
         let (status, instance) = rx.await.map_err(|_| {
             ServiceRegistrationError::RegistrationError(
@@ -260,6 +239,36 @@ impl Drop for ServiceRegistration {
     fn drop(&mut self) {
         self.deregister(None).ok();
     }
+}
+
+fn register(
+    instance: ServiceInstance,
+    interface_index: Option<NonZeroU32>,
+    tx: Option<oneshot::Sender<(u32, ServiceInstance)>>,
+) -> Result<(), ServiceRegistrationError> {
+    // Hand ownership of the instance to the in-flight registration; it is
+    // returned to us through `rx` once the completion callback fires.
+    let request = build_request(instance, interface_index, tx);
+
+    // SAFETY: `request` references the instance and context, both owned by the
+    // `CallbackContext` behind `context_ptr`, which stays alive until the
+    // completion callback reclaims it.
+    let result = unsafe { Dns::DnsServiceRegister(&request, None) };
+    trace!("DnsServiceRegister result: {result}");
+
+    if result != DNS_REQUEST_PENDING {
+        // The callback will not fire; reclaim the context (which frees the
+        // instance on drop).
+        // SAFETY: `context_ptr` came from `Box::into_raw` in `build_request`.
+        let context_ptr = request.pQueryContext as *mut CallbackContext;
+        unsafe {
+            drop(Box::from_raw(context_ptr));
+        }
+        return Err(ServiceRegistrationError::RegistrationError(format!(
+            "DnsServiceRegister failed with status: {result}"
+        )));
+    }
+    Ok(())
 }
 
 /// Builds a `DNS_SERVICE_REGISTER_REQUEST` that transfers ownership of `instance`
