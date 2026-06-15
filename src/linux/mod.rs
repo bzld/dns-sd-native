@@ -1,16 +1,16 @@
 use zbus::Connection;
 
+mod browse;
 mod dbus;
 use dbus::*;
 use futures_util::stream::StreamExt;
+
+pub(crate) use browse::{BrowseGuard, browse_start};
 
 use log::{error, trace, warn};
 use std::num::NonZeroU32;
 
 use crate::{ServiceRegistrationError, TxtRecordValue};
-
-const AVAHI_IF_UNSPEC: i32 = -1;
-const AVAHI_PROTO_UNSPEC: i32 = -1;
 
 /// Reference to a registered service instance.
 ///

@@ -1,4 +1,7 @@
+mod browse;
 mod ffi;
+
+pub(crate) use browse::{BrowseGuard, browse_start};
 
 use ffi::*;
 use log::trace;
