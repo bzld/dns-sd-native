@@ -6,13 +6,11 @@
 
 Access the operating system's built-in
 [DNS-SD](https://en.wikipedia.org/wiki/Zero-configuration_networking#DNS-based_service_discovery) /
-[mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) stack for service registration.
+[mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) stack for service registration and discovery.
 
-This crate provides a cross-platform async API (using [Tokio](https://tokio.rs)) to register
-DNS-SD services via native OS facilities — no bundled mDNS implementation, no extra system
+This crate provides a cross-platform async API (using [Tokio](https://tokio.rs)) to register and
+browse DNS-SD services via native OS facilities — no bundled mDNS implementation, no extra system
 dependencies to install.
-
-> **Note:** This crate currently supports _registration_ of services only, not browsing/discovery.
 
 ## Platform Support
 
@@ -38,7 +36,9 @@ There also exist various crates implementing a wrapper on top of the Apple DNS-S
 Windows if users install Bonjour for Windows, and on Linux if the `libavahi-compat-libdnssd` library is installed. Compared to these, this
 crate requires no additional dependencies to install for end users.
 
-## Example
+## Examples
+
+### Register a service
 
 Register a service of type `_http._tcp` on port 8080:
 
@@ -59,7 +59,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-See the [`examples/`](examples/) directory for a full CLI tool that registers arbitrary services.
+### Browse for services
+
+By default a `ServiceBrowser` discovers **all** service types on the network; filter on
+`DiscoveredService::service_type`, or narrow to a single type with `.service_type("_http._tcp")`.
+
+```rust
+use dns_sd_native::{BrowseEvent, ServiceBrowserBuilder};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut browser = ServiceBrowserBuilder::new().browse().await?;
+
+    while let Some(event) = browser.recv().await {
+        match event? {
+            BrowseEvent::Found(svc) => {
+                println!("+ [{}] {} at {}:{}", svc.service_type, svc.name, svc.host_name, svc.port);
+            }
+            BrowseEvent::Removed(svc) => println!("- [{}] {}", svc.service_type, svc.name),
+        }
+    }
+    // Dropping `browser` stops the browse.
+    Ok(())
+}
+```
+
+See the [`examples/`](examples/) directory for full CLI tools that register
+(`register-service`) and browse (`discover-service`) services.
+
+> **Platform note:** on Windows, service _removal_ (`BrowseEvent::Removed`) is not currently
+> reported; appearances and resolution are. Removal events are delivered on macOS and Linux.
 
 ## License
 

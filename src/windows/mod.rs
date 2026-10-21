@@ -1,3 +1,6 @@
+mod browse;
+pub(crate) use browse::{BrowseGuard, browse_start};
+
 use widestring::U16CString;
 use windows::Win32::Foundation::ERROR_SUCCESS;
 use windows::Win32::NetworkManagement::Dns;
